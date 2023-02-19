@@ -31,7 +31,6 @@ class App(ttk.Window):
         elif icon:
             super().__init__(iconphoto=icon)  # iconphoto has to be None in order to override with custom icon
 
-            # icon help: https://stackoverflow.com/questions/11176638/tkinter-tclerror-error-reading-bitmap-file
             self.iconphoto(True, tk.PhotoImage(file=icon))
         
         self.hidpi_bool = hidpi_bool
@@ -149,15 +148,10 @@ class App(ttk.Window):
         self.separator2 = tk.Frame(self.root, bd=10, relief='sunken', height=4)
         self.separator2.grid(row=1, column=0, columnspan=2, rowspan=1, pady=10, padx=10, sticky='ew')
         
-
-        # Frame configuration
-
         # Main left and right container frames
-        # lframe = ttk.Frame(root, bootstyle=(INFO))
         self.lframe = ttk.Frame(self.root)
         self.lframe.grid(row=2, column=0, padx=10, pady=10, sticky='nsew')
 
-        # self.rframe = ttk.Frame(root, bootstyle=(SUCCESS))
         self.rframe = ttk.Frame(self.root)
         self.rframe.grid(row=2, column=1, padx=10, pady=10, sticky='nsew')
 
@@ -250,7 +244,7 @@ class App(ttk.Window):
         self.frm_theme_selection.columnconfigure(7, weight=1)
         self.frm_theme_selection.columnconfigure(8, weight=1)
 
-        # Matplotlib
+        # Main temperature plot
         self.fig_main_temp_plot = Figure()
         self.ax = self.fig_main_temp_plot.add_subplot(111)
 
@@ -304,6 +298,7 @@ class App(ttk.Window):
         else:
             self.status_fsize = 8
 
+        # Status frame labels
         self.str_heater_status = tk.StringVar(value='HEATER OFF')
         self.lbl_mean_temp = ttk.Label(master=self.frm_status, text='Average Temperature: ', font=f"-size {self.status_fsize}")
         self.lbl_stddev = ttk.Label(master=self.frm_status, text= f'1-\N{GREEK SMALL LETTER SIGMA} Std. Deviation: ', font=f"-size {self.status_fsize}")
@@ -357,7 +352,7 @@ class App(ttk.Window):
         self.frm_status.rowconfigure(4, weight=1)
         self.frm_status.rowconfigure(5, weight=1)
 
-        # Control pane
+        # Control pane - manual or autosequence selector
         self.frm_control = ttk.Labelframe(master=self.rframe, text="Control", padding=10, bootstyle=INFO)
         if self.hidpi_bool:
             self.frm_control.grid(row=1, column=0, sticky='ew', padx=10, pady=10)
@@ -392,8 +387,6 @@ class App(ttk.Window):
         self.btn_submit_seq_auto = ttk.Button(master=self.frm_auto, width=10, text="START", bootstyle=SUCCESS, state=DISABLED, command=self.on_start_auto_sequence)
         self.btn_submit_seq_auto.grid(row=1, column=1, padx=10, pady=10)
 
-        # todo Add buttons here for the auto sequence cancel command=lambda:self.on_abort_auto_seq
-
         # Initialize auto tab with a message telling the user to input a sequence
         self.lbl_init_auto = ttk.Label(master=self.frm_auto, text='Please select a temperature profile to run.')
         self.lbl_init_auto.grid(row=0, column=0, columnspan=2, sticky='w', padx=10, pady=100)
@@ -401,6 +394,7 @@ class App(ttk.Window):
         self.rframe.rowconfigure(1, weight=1)
 
         # Monitor Frame
+        # Padding depends on screen resolution
         if self.hidpi_bool:
             self.frm_monitor = ttk.Labelframe(master=self.rframe, text="Monitor", padding=10, bootstyle=INFO)
             self.frm_monitor.grid(row=2, column=0, sticky='ew', padx=10, pady=10)
@@ -420,6 +414,7 @@ class App(ttk.Window):
             self.frm_fan_monitor = ttk.Frame(self.frm_monitor, padding=(30, 0, 10, 0))
             self.frm_fan_monitor.grid(row=0, column=1, sticky='ns')
 
+        # Temperature monitor labels
         self.str_tc1 = tk.StringVar(value=f'-- \N{DEGREE CELSIUS}')
         self.str_tc2 = tk.StringVar(value=f'-- \N{DEGREE CELSIUS}')
         self.str_tc3 = tk.StringVar(value=f'-- \N{DEGREE CELSIUS}')
@@ -468,7 +463,7 @@ class App(ttk.Window):
         self.frm_status.rowconfigure(5, weight=1)
 
 
-
+        # Fan status monitor labels
         self.str_fan1 = tk.StringVar(value=f'-- RPM')
         self.str_fan2 = tk.StringVar(value=f'-- RPM')
 
@@ -490,7 +485,6 @@ class App(ttk.Window):
 
         self.frm_status.rowconfigure(0, weight=1)
         self.frm_status.rowconfigure(1, weight=1)
-
 
         self.root.pack(fill=BOTH, expand=YES)
 
@@ -677,7 +671,7 @@ class App(ttk.Window):
                 
             self.rframe.rowconfigure(1, weight=1)
 
-            # Build an interpolation function
+            # Build an interpolation function for the autosequence
             self.auto_sequence_interp = interpolate.interp1d(self.auto_sequence[:,0], self.auto_sequence[:,1])
 
     def write_log(self, msg):
@@ -816,7 +810,6 @@ class App(ttk.Window):
         self.temp_mean = np.mean(self.tc_readings)
         self.temp_std = np.std(self.tc_readings, ddof=1)    # Sample standard deviation, not population std deviation
 
-        # print(parse_args)
         self.flt_mean_temp.set(f'{round(self.temp_mean, 2)} \N{DEGREE CELSIUS}')
         self.flt_stddev.set(f'{round(self.temp_std, 2)} \N{DEGREE CELSIUS}')
         self.flt_setpoint.set(f'{round(self.setpoint, 2)} \N{DEGREE CELSIUS}')
@@ -845,6 +838,7 @@ class App(ttk.Window):
 
         if int(estop) and not self.estop_bool:      # Estop can be either 1 or 2 depending on the fault condition. Only calls the estop function once and not in subsequent loops. TODO log the fault condition
             self.on_estop()
+            self.write_log(f'ESTOP CODE: {estop}')
 
         self.draw_plot()
 
@@ -865,6 +859,9 @@ class App(ttk.Window):
 
     # "State machine" update functions - self.str_mode holds the current state
     def on_set_manual_setpoint(self):      # This is kind of like a state transistion manager
+        if not self.entry_manual_setpoint.get():    # If the manual setpoint field was empty
+            return
+
         if 'AUTO' in self.str_mode.get():
             self.on_abort_auto_seq()
 
@@ -920,7 +917,6 @@ class App(ttk.Window):
             self.str_status.set('CONNECTED')
             self.lbl_status.config(foreground=self.status_colors['CONNECTED'])
             self.btn_select_seq_auto.config(state=NORMAL)
-            #todo make sure that the state handling for the auto sequence buttons is done correctly when the sequence is over
 
         else:
             # Update the minimap
@@ -953,13 +949,15 @@ class App(ttk.Window):
         if len(self.history_time):
             history_arry = np.column_stack((self.history_time, self.history_temp, self.history_setpoint, self.history_estop))
             header_str = 'Time [min], TC1 [degC], TC2 [degC], TC3 [degC], TC4 [degC], TC5 [degC], TC6 [degC], Setpoint [degC], Estop'
-            np.savetxt(f'{self.data_dirname}/{self.get_datetime_str()}.csv', history_arry, delimiter=',', header=header_str)
-
-        self.write_log(f'Wrote data to file: {self.data_dirname}/{self.get_datetime_str()}.csv')
+            fname = f'{self.data_dirname}/{self.get_datetime_str()}.csv'
+            np.savetxt(fname, history_arry, delimiter=',', header=header_str)
+            self.write_log(f'Wrote data to file: {fname}')
 
     def savefig(self):
-        self.fig_main_temp_plot.savefig(f'{self.data_dirname}/{self.get_datetime_str()}.png', dpi=400)
-        self.write_log(f'Wrote data to file: {self.data_dirname}/{self.get_datetime_str()}.png')
+        if len(self.history_time):
+            fname = f'{self.data_dirname}/{self.get_datetime_str()}.png'
+            self.fig_main_temp_plot.savefig(fname, dpi=400)
+            self.write_log(f'Wrote data to file: {fname}')
 
 def process_incoming_data():
 
@@ -1012,7 +1010,6 @@ def process_incoming_data():
     else:
         app.after(1000, process_incoming_data)
 
-    # print(app.ports != serial.tools.list_ports.comports())
     if app.ports != serial.tools.list_ports.comports():     # The list of ports has changed, like after adding a device
         # Update the menu of possible COM ports
 
@@ -1065,36 +1062,10 @@ def process_incoming_data():
         app.mb_fan2_com.grid(row=0, column=7, padx=5, pady=5, sticky='w')
 
 
-# TODO put all the instance attributes of serial in the constructor
 if __name__ == "__main__":
-    hidpi_bool = False
+    hidpi_bool = True
 
     app = App("TRAK TRO 37 SMH Command, Control, and Monitoring Center", "iconic.png", hidpi_bool)
     
-    # NOTE: recursion depth exceeds if you configure it to process_incoming_data(app)
     app.after(0, process_incoming_data)
     app.mainloop()
-
-    # update mpl theme with light/dark -> use a plotly theme
-    # todo make multithreaded so it doesn't hang    
-    # add logs
-
-    # DONE
-    # TODO ensure that estopping kills any running sequence
-    # Add option for all time plotting
-    # Deal with the nans incoming
-    # put header on output csv, and output ALL data fields
-    # figure out something different to do with the nans than just reverting to the last one, maybe make a log of when it shows nan
-    # Add fan RPM support
-    # Graph/scale the limits to account for the setpoint
-
-    # arduino:
-    # Add a code on the arduino side for invalid temp detected on mcu side instead of just echoing the estop value. If it gets a 9000 value, don't output 9000 but instead set temp to 0 and set the unsafe bool to 1
-    # New method to parse float
-    
-    """
-    MPL notes
-    snapping makes the axes sharper
-    list(ax.lines) returns the list of artists (lines, whatever was plotted)
-    ax.lines.pop() returns the most recently added artist
-    """
