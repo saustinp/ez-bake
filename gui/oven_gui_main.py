@@ -35,7 +35,7 @@ class App(ttk.Window):
             self.iconphoto(True, tk.PhotoImage(file=icon))
 
         self.data_dirname = self.get_datetime_str()
-        os.makedirs(f'./{self.data_dirname}')
+        os.makedirs(f'./runs/{self.data_dirname}')
 
         ############### Initialize all variables ###############
         # Theme variable
@@ -49,11 +49,11 @@ class App(ttk.Window):
 
         self.fan1_com_port_is_selected = None
         self.selected_fan1_comport = tk.StringVar(value='None')
-        self.selected_fan1_comport.trace("w", lambda *_:self.update_com_port_fan2())
+        self.selected_fan1_comport.trace("w", lambda *_:self.update_com_port_fan1())
 
         self.fan2_com_port_is_selected= None
         self.selected_fan2_comport = tk.StringVar(value='None')
-        self.selected_fan2_comport.trace("w", lambda *_:self.update_com_port_fan1())
+        self.selected_fan2_comport.trace("w", lambda *_:self.update_com_port_fan2())
 
         self.estop_bool = 0
 
@@ -749,7 +749,6 @@ class App(ttk.Window):
         """
 
         parse_args = data_str.split(' ')
-        print(parse_args)
         for i, arg in enumerate(parse_args[:6]):
             if arg == 'nan':
                 if len(self.history_temp):
@@ -759,12 +758,6 @@ class App(ttk.Window):
                 self.write_log(f'Nan detected in TC {i+1}')
             else:
                 self.tc_readings[i] = float(parse_args[i])
-        # self.tc_readings[0] = float(parse_args[0])
-        # self.tc_readings[1] = float(parse_args[1])
-        # self.tc_readings[2] = float(parse_args[2])
-        # self.tc_readings[3] = float(parse_args[3])
-        # self.tc_readings[4] = float(parse_args[4])
-        # self.tc_readings[5] = float(parse_args[5])
         self.heater_is_active = int(parse_args[6])
         self.setpoint = float(parse_args[7])
         estop = int(parse_args[8])
@@ -1017,7 +1010,7 @@ def process_incoming_data():
 # TODO put all the instance attributes of serial in the constructor
 if __name__ == "__main__":
 
-    app = App("TRAK TRO 37 SMH Command, Control, and Monitoring Center", "icon.png")
+    app = App("TRAK TRO 37 SMH Command, Control, and Monitoring Center", "iconic.png")
     
     # NOTE: recursion depth exceeds if you configure it to process_incoming_data(app)
     app.after(0, process_incoming_data)
