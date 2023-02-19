@@ -16,7 +16,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
 class App(ttk.Window):
-    def __init__(self, window_title=None, icon=None):
+    def __init__(self, window_title=None, icon=None, hidpi_bool=False):
 
         if window_title and icon:
 
@@ -33,6 +33,12 @@ class App(ttk.Window):
 
             # icon help: https://stackoverflow.com/questions/11176638/tkinter-tclerror-error-reading-bitmap-file
             self.iconphoto(True, tk.PhotoImage(file=icon))
+        
+        self.hidpi_bool = hidpi_bool
+
+        if not self.hidpi_bool:
+            def_font = tk.font.nametofont("TkDefaultFont")
+            def_font.config(size=10)
 
         self.data_dirname = self.get_datetime_str()
         os.makedirs(f'./runs/{self.data_dirname}')
@@ -116,18 +122,28 @@ class App(ttk.Window):
         # themes = ['sandstone', 'darkly']   # Names for light and dark themes
         self.themes = ['Dark', 'Light']
 
-        self.frm_title = ttk.Frame(self.root, padding=(10, 10, 10, 0))
+        if self.hidpi_bool:
+            self.frm_title = ttk.Frame(self.root, padding=(10, 10, 10, 0))
+        else:
+            self.frm_title = ttk.Frame(self.root)
+            
         self.frm_title.grid(row=0, column=0, columnspan=2, rowspan=1, sticky='ew')
-
-        self.lbl_title = ttk.Label(master=self.frm_title, text="Oven Control", font="-size 24 -weight bold")
-        self.lbl_title.pack(side=LEFT)
 
         self.str_status = tk.StringVar(value='INACTIVE')
         self.status_colors = {'INACTIVE': 'black', 'CONNECTED': 'blue', 'RUNNING': 'green', 'ESTOPPED': 'red'}
-        self.lbl_status = ttk.Label(master=self.frm_title, textvariable=self.str_status, font="-size 18 -weight bold", bootstyle=(SECONDARY))
+
+        if self.hidpi_bool:
+            self.lbl_title = ttk.Label(master=self.frm_title, text="Oven Control", font="-size 24 -weight bold")
+            self.lbl_status = ttk.Label(master=self.frm_title, textvariable=self.str_status, font="-size 18 -weight bold", bootstyle=(SECONDARY))
+            self.lbl_status_text = ttk.Label(master=self.frm_title, text="STATUS: ", font="-size 18 -weight bold")
+        else:
+            self.lbl_title = ttk.Label(master=self.frm_title, text="Oven Control", font="-size 18 -weight bold")
+            self.lbl_status = ttk.Label(master=self.frm_title, textvariable=self.str_status, font="-size 14 -weight bold", bootstyle=(SECONDARY))
+            self.lbl_status_text = ttk.Label(master=self.frm_title, text="STATUS: ", font="-size 14 -weight bold")
+
+        self.lbl_title.pack(side=LEFT)
         self.lbl_status.pack(side=RIGHT)
 
-        self.lbl_status_text = ttk.Label(master=self.frm_title, text="STATUS: ", font="-size 18 -weight bold")
         self.lbl_status_text.pack(side=RIGHT)
 
         self.separator2 = tk.Frame(self.root, bd=10, relief='sunken', height=4)
@@ -145,9 +161,14 @@ class App(ttk.Window):
         self.rframe = ttk.Frame(self.root)
         self.rframe.grid(row=2, column=1, padx=10, pady=10, sticky='nsew')
 
-        self.root.columnconfigure(0, minsize=1400, weight=1)
-        self.root.columnconfigure(1, minsize=900, weight=1)
-        self.root.rowconfigure(2, minsize=1500, weight=1)
+        if self.hidpi_bool:
+            self.root.columnconfigure(0, minsize=1400, weight=1)
+            self.root.columnconfigure(1, minsize=900, weight=1)
+            self.root.rowconfigure(2, minsize=1500, weight=1)
+        else:
+            self.root.columnconfigure(0, minsize=900, weight=1)
+            self.root.columnconfigure(1, minsize=500, weight=1)
+            self.root.rowconfigure(2, minsize=800, weight=1)
 
         self.frm_theme_selection = ttk.Labelframe(master=self.lframe, text="Settings", padding=10, bootstyle=INFO)
         self.frm_theme_selection.grid(row=0, column=0, sticky='ew', padx=10, pady=10)
@@ -278,7 +299,11 @@ class App(ttk.Window):
         self.frm_status.grid(row=0, column=0, sticky='ew', padx=10, pady=10)
         self.rframe.columnconfigure(0, minsize=self.rframe.winfo_width(), weight=1)
 
-        self.status_fsize = 12
+        if self.hidpi_bool:
+            self.status_fsize = 12
+        else:
+            self.status_fsize = 8
+
         self.str_heater_status = tk.StringVar(value='HEATER OFF')
         self.lbl_mean_temp = ttk.Label(master=self.frm_status, text='Average Temperature: ', font=f"-size {self.status_fsize}")
         self.lbl_stddev = ttk.Label(master=self.frm_status, text= f'1-\N{GREEK SMALL LETTER SIGMA} Std. Deviation: ', font=f"-size {self.status_fsize}")
@@ -312,9 +337,14 @@ class App(ttk.Window):
         self.lbl_action_val.grid(row=4, column=1, sticky='w')
         self.lbl_mode_val.grid(row=3, column=1, sticky='w')
 
-        self.heater_canvas = tk.Canvas(self.frm_status, width=200, height=200)
-        self.heater_canvas.grid(row=0, column=2, rowspan=5)
-        self.status_indicator = self.heater_canvas.create_oval(0, 0, 180, 180, fill='gray')
+        if self.hidpi_bool:
+            self.heater_canvas = tk.Canvas(self.frm_status, width=200, height=200)
+            self.heater_canvas.grid(row=0, column=2, rowspan=5)
+            self.status_indicator = self.heater_canvas.create_oval(0, 0, 180, 180, fill='gray')
+        else:
+            self.heater_canvas = tk.Canvas(self.frm_status, width=100, height=100)
+            self.heater_canvas.grid(row=0, column=2, rowspan=5)
+            self.status_indicator = self.heater_canvas.create_oval(10, 0, 90, 80, fill='gray')
 
         self.frm_status.columnconfigure(0, weight=1)
         self.frm_status.columnconfigure(1, weight=1)
@@ -329,11 +359,17 @@ class App(ttk.Window):
 
         # Control pane
         self.frm_control = ttk.Labelframe(master=self.rframe, text="Control", padding=10, bootstyle=INFO)
-        self.frm_control.grid(row=1, column=0, sticky='ew', padx=10, pady=10)
+        if self.hidpi_bool:
+            self.frm_control.grid(row=1, column=0, sticky='ew', padx=10, pady=10)
+        else:
+            self.frm_control.grid(row=1, column=0, sticky='ew', padx=10)
         # self.rframe.rowconfigure(1, weight=1)
 
+        if self.hidpi_bool:
+            self.nb = ttk.Notebook(self.frm_control, padding=5)
+        else:    
+            self.nb = ttk.Notebook(self.frm_control, padding=10)
 
-        self.nb = ttk.Notebook(self.frm_control, padding=15)
         self.nb.grid(row=0, column=0, sticky='nsew')
         self.frm_manual = ttk.Frame(self.nb)
         self.frm_auto = ttk.Frame(self.nb)
@@ -367,16 +403,24 @@ class App(ttk.Window):
         self.rframe.rowconfigure(1, weight=1)
 
         # Monitor Frame
-        self.frm_monitor = ttk.Labelframe(master=self.rframe, text="Monitor", padding=10, bootstyle=INFO)
-        self.frm_monitor.grid(row=2, column=0, sticky='ew', padx=10, pady=10)
+        if self.hidpi_bool:
+            self.frm_monitor = ttk.Labelframe(master=self.rframe, text="Monitor", padding=10, bootstyle=INFO)
+            self.frm_monitor.grid(row=2, column=0, sticky='ew', padx=10, pady=10)
 
+            self.frm_temp_monitor = ttk.Frame(self.frm_monitor, padding=(20, 10, 10, 10))
+            self.frm_temp_monitor.grid(row=0, column=0, sticky='ns')
+            
+            self.frm_fan_monitor = ttk.Frame(self.frm_monitor, padding=(60, 10, 10, 10))
+            self.frm_fan_monitor.grid(row=0, column=1, sticky='ns')
+        else:
+            self.frm_monitor = ttk.Labelframe(master=self.rframe, text="Monitor", padding=10, bootstyle=INFO)
+            self.frm_monitor.grid(row=2, column=0, sticky='ew', padx=10)
 
-        self.frm_temp_monitor = ttk.Frame(self.frm_monitor, padding=(20, 10, 10, 10))
-        self.frm_temp_monitor.grid(row=0, column=0, sticky='ns')
-        
-        self.frm_fan_monitor = ttk.Frame(self.frm_monitor, padding=(60, 10, 10, 10))
-        self.frm_fan_monitor.grid(row=0, column=1, sticky='ns')
-
+            self.frm_temp_monitor = ttk.Frame(self.frm_monitor, padding=(10, 0, 10, 0))
+            self.frm_temp_monitor.grid(row=0, column=0, sticky='ns')
+            
+            self.frm_fan_monitor = ttk.Frame(self.frm_monitor, padding=(30, 0, 10, 0))
+            self.frm_fan_monitor.grid(row=0, column=1, sticky='ns')
 
         self.str_tc1 = tk.StringVar(value=f'-- \N{DEGREE CELSIUS}')
         self.str_tc2 = tk.StringVar(value=f'-- \N{DEGREE CELSIUS}')
@@ -608,16 +652,31 @@ class App(ttk.Window):
             self.btn_submit_seq_auto.config(state=NORMAL)
 
             # Matplotlib plot sequence widget
-            self.fig_seq = Figure(figsize=(1, 3.5), dpi=100)
+            if self.hidpi_bool:
+                self.fig_seq = Figure(figsize=(1, 3.5), dpi=100)
+            else:
+                self.fig_seq = Figure(figsize=(1, 2.1), dpi=100)
+                
             self.seq_minimap = self.fig_seq.add_subplot(111)
             self.seq_minimap.plot(self.auto_sequence[:,0], self.auto_sequence[:,1], 'black')
-            self.seq_minimap.set_xlabel('Time [min]', fontsize=10)
-            self.seq_minimap.set_ylabel(f'Temperature [\N{DEGREE CELSIUS}]', fontsize=10)
-            self.seq_minimap.tick_params(axis='both', which='major', labelsize=10)
-            self.seq_minimap.set_title('Sequence', fontsize=15)
+
+            if self.hidpi_bool:
+                self.seq_minimap.set_xlabel('Time [min]', fontsize=10)
+                self.seq_minimap.set_ylabel(f'Temperature [\N{DEGREE CELSIUS}]', fontsize=10)
+                self.seq_minimap.tick_params(axis='both', which='major', labelsize=10)
+                self.seq_minimap.set_title('Sequence', fontsize=15)
+            else:
+                self.seq_minimap.set_xlabel('Time [min]', fontsize=5)
+                self.seq_minimap.set_ylabel(f'Temperature [\N{DEGREE CELSIUS}]', fontsize=5)
+                self.seq_minimap.tick_params(axis='both', which='major', labelsize=5)
+                self.seq_minimap.set_title('Sequence', fontsize=6)
 
             self.canvas_autoseq = FigureCanvasTkAgg(self.fig_seq, master=self.frm_auto)
-            self.canvas_autoseq.get_tk_widget().grid(row=3, column=0, columnspan=2, sticky='nsew', pady=20, ipady=20)
+            if self.hidpi_bool:
+                self.canvas_autoseq.get_tk_widget().grid(row=3, column=0, columnspan=2, sticky='nsew', pady=20, ipady=20)
+            else:
+                self.canvas_autoseq.get_tk_widget().grid(row=3, column=0, columnspan=2, sticky='nsew', pady=20, ipady=20)
+                
             self.rframe.rowconfigure(1, weight=1)
 
             # Build an interpolation function
@@ -641,10 +700,17 @@ class App(ttk.Window):
                 self.ax.plot(time_arry, setpoint_arry, 'red', linewidth=3, label='Setpoint')
                 self.ax.legend()    #loc='northeast'
 
-        self.ax.set_xlabel('Time [min]', fontsize=25)
-        self.ax.set_ylabel(f'Temperature [\N{DEGREE CELSIUS}]', fontsize=20)
-        self.ax.tick_params(axis='both', which='major', labelsize=20)
-        self.ax.set_title('Temperature History', fontsize=35)
+        if self.hidpi_bool:
+            self.ax.set_xlabel('Time [min]', fontsize=25)
+            self.ax.set_ylabel(f'Temperature [\N{DEGREE CELSIUS}]', fontsize=20)
+            self.ax.tick_params(axis='both', which='major', labelsize=20)
+            self.ax.set_title('Temperature History', fontsize=35)
+        else:
+            self.ax.set_xlabel('Time [min]', fontsize=10)
+            self.ax.set_ylabel(f'Temperature [\N{DEGREE CELSIUS}]', fontsize=10)
+            self.ax.tick_params(axis='both', which='major', labelsize=10)
+            self.ax.set_title('Temperature History', fontsize=14)
+
         self.ax.set_xlim(xlim)       # Set the current xlim to whatever was initialized in plt_scale_var
         self.ax.set_ylim(ylim)       # Compute the ylim based on the range of data being displayed
 
@@ -769,9 +835,9 @@ class App(ttk.Window):
         self.temp_std = np.std(self.tc_readings, ddof=1)    # Sample standard deviation, not population std deviation
 
         # print(parse_args)
-        self.flt_mean_temp.set(round(self.temp_mean, 2))
-        self.flt_stddev.set(round(self.temp_std, 2))
-        self.flt_setpoint.set(self.setpoint)
+        self.flt_mean_temp.set(f'{round(self.temp_mean, 2)} \N{DEGREE CELSIUS}')
+        self.flt_stddev.set(f'{round(self.temp_std, 2)} \N{DEGREE CELSIUS}')
+        self.flt_setpoint.set(f'{round(self.setpoint, 2)} \N{DEGREE CELSIUS}')
 
         self.set_heater_indicator(self.heater_is_active)
 
@@ -1009,8 +1075,9 @@ def process_incoming_data():
 
 # TODO put all the instance attributes of serial in the constructor
 if __name__ == "__main__":
+    hidpi_bool = False
 
-    app = App("TRAK TRO 37 SMH Command, Control, and Monitoring Center", "iconic.png")
+    app = App("TRAK TRO 37 SMH Command, Control, and Monitoring Center", "iconic.png", hidpi_bool)
     
     # NOTE: recursion depth exceeds if you configure it to process_incoming_data(app)
     app.after(0, process_incoming_data)
