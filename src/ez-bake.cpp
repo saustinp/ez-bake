@@ -6,10 +6,12 @@
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 tempCArray temperatures;
-bool isUnsafe = false;
+int isUnsafe = 0;
 float currentSetpointC = 0;
 uint8_t loopsSinceStateChange = DEBOUNCE_LOOPS;
 bool lastHeaterState = false;
+bool targetHeaterState = false;
+float tmp;
 
 void setup(void) {
   Serial.begin(SERIAL_BAUDRATE);
@@ -22,7 +24,7 @@ void setup(void) {
 bool areAllTemperaturesValid(tempCArray temperatures) {
   for (int8_t i = 0; i < NUM_THERMOCOUPLES; i++) {
     float tempC = temperatures[i];
-    if (tempC == DEVICE_DISCONNECTED ||   // No "_C" in the library that I'm using
+    if (tempC == DEVICE_DISCONNECTED ||
         tempC < MIN_LEGAL_TEMP_C ||
         tempC > MAX_LEGAL_TEMP_C) {
       return false;
@@ -38,25 +40,31 @@ void readThermocouples(tempCArray temperatures) {
   }
 }
 
-void serialPrintTemperatures(tempCArray temperatures) {
+void serialPrintSummary(tempCArray temperatures, bool targetHeaterState, float currentSetpointC, int isUnsafe) {
   for (int i = 0; i < NUM_THERMOCOUPLES; i++ ) {
       Serial.print(temperatures[i]);
       Serial.print(" ");
   }
+  Serial.print(targetHeaterState);
+  Serial.print(" ");
+  Serial.print(currentSetpointC);
+  Serial.print(" ");
+  Serial.print(isUnsafe);
   Serial.println();
 }
 
 bool getHeaterControlState(tempCArray temperatures, float setpointC) {
   // Get the mean temperature
   float meanTemperatureC = 0;
-  uint8_t good_temps = 0;
+  float validTempCounts = 0;
   for (int i = 0; i < NUM_THERMOCOUPLES; i++ ) {
-      if (0 < temperatures[i] && temperatures[i] < 200) {
+      if (!isnan(temperatures[i])){
         meanTemperatureC += temperatures[i];
-        good_temps ++;
+        validTempCounts++;
       }
   }
-  meanTemperatureC /= good_temps;
+  meanTemperatureC /= validTempCounts;
+  // Serial.println(meanTemperatureC);
 
   // Simple bang-bang control
   return meanTemperatureC < setpointC;
@@ -65,28 +73,42 @@ bool getHeaterControlState(tempCArray temperatures, float setpointC) {
 void loop(void) {
   if (isUnsafe) {
     digitalWrite(OUTPUT_PIN, LOW);
-    return;
   }
 
+  // Accepts an "estop" command from the user. Interprets any temp over 1000C as a shut-down command
   if (Serial.available() > 0) {
-    currentSetpointC = Serial.parseFloat();
+    tmp = Serial.parseFloat();
+    if ((tmp >= 0) && (tmp < MAX_LEGAL_TEMP_C))    // Input temp has to be bounded between [0, MAX_LEGAL_TEMP_C) degrees
+      currentSetpointC = tmp;
+    if (tmp > 1000){
+      isUnsafe = 1;   // isUnsafe == 1 means that the controller received an erroneous setpoint, to be interpreted as an estop condition
+      currentSetpointC = 0;
+    }
   }
 
-  readThermocouples(temperatures);
-  serialPrintTemperatures(temperatures);
-  if (!areAllTemperaturesValid(temperatures)) {
-    Serial.println("Illegal temperature detected, entering safety mode");
-    isUnsafe = true;
-    return;
-  }
+  readThermocouples(temperatures);   // Reads all thermocouples
   
-  bool nextHeaterState = getHeaterControlState(temperatures, currentSetpointC);
-  loopsSinceStateChange = min(loopsSinceStateChange + 1, DEBOUNCE_LOOPS);
-  if (nextHeaterState == lastHeaterState || loopsSinceStateChange < DEBOUNCE_LOOPS) {
-    return; // Either we don't want to change our control state, or aren't allowed to yet
+  if (!areAllTemperaturesValid(temperatures)) {
+    isUnsafe = 2;   // isUnsafe == 2 means that the controller detected a fault condition
+    currentSetpointC = 0;
   }
 
-  digitalWrite(OUTPUT_PIN, nextHeaterState);
-  loopsSinceStateChange = 0;
-  lastHeaterState = nextHeaterState;
+  if (!isUnsafe){
+    targetHeaterState = getHeaterControlState(temperatures, currentSetpointC);
+    loopsSinceStateChange = min(loopsSinceStateChange + 1, DEBOUNCE_LOOPS);
+    if (targetHeaterState == lastHeaterState || loopsSinceStateChange < DEBOUNCE_LOOPS) {
+      targetHeaterState = lastHeaterState; // Either we don't want to change our control state, or aren't allowed to yet. Updated so that the heater state can be printed out along with the sensor summaries on every loop
+    }
+  }
+  else
+    targetHeaterState = 0;
+
+  serialPrintSummary(temperatures, targetHeaterState, currentSetpointC, isUnsafe);    // Moving this line down so the heater status can be printed after the bang-bang calculation
+
+  // Adding a conditional so that the heater state can be printed out at every iteration - avoids breaking out of loop() if the state is not updated
+  if ((targetHeaterState != lastHeaterState) && !isUnsafe){
+    digitalWrite(OUTPUT_PIN, targetHeaterState);
+    loopsSinceStateChange = 0;
+    lastHeaterState = targetHeaterState;
+  }
 }
