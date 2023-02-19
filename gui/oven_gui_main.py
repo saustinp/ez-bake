@@ -1017,7 +1017,7 @@ def process_incoming_data():
 # TODO put all the instance attributes of serial in the constructor
 if __name__ == "__main__":
 
-    app = App("TRAK TRO 37 SMH Command, Control, and Monitoring Center", "oven_cropped.png")
+    app = App("TRAK TRO 37 SMH Command, Control, and Monitoring Center", "icon.png")
     
     # NOTE: recursion depth exceeds if you configure it to process_incoming_data(app)
     app.after(0, process_incoming_data)
