@@ -251,10 +251,10 @@ class App(ttk.Window):
         self.frm_theme_selection.columnconfigure(8, weight=1)
 
         # Matplotlib
-        self.fig = Figure()
-        self.ax = self.fig.add_subplot(111)
+        self.fig_main_temp_plot = Figure()
+        self.ax = self.fig_main_temp_plot.add_subplot(111)
 
-        self.canvas = FigureCanvasTkAgg(self.fig, master=self.lframe)
+        self.canvas = FigureCanvasTkAgg(self.fig_main_temp_plot, master=self.lframe)
         self.canvas.get_tk_widget().grid(row=1, column=0, sticky='nsew')
 
         self.draw_plot()
@@ -263,7 +263,7 @@ class App(ttk.Window):
         self.frm_plot_options = ttk.Frame(master=self.lframe, padding=10)
         self.frm_plot_options.grid(row=2, column=0, sticky='ew')
 
-        self.btn_savefig = ttk.Button(master=self.frm_plot_options, text='Save Plot...', width=15, bootstyle=(INFO, OUTLINE), command=lambda:self.fig.savefig(f'{self.data_dirname}/{self.get_datetime_str()}.png', dpi=400))
+        self.btn_savefig = ttk.Button(master=self.frm_plot_options, text='Save Plot...', width=15, bootstyle=(INFO, OUTLINE), command=lambda:self.savefig())
         self.btn_savefig.pack(side=RIGHT, padx=150, pady=5)
 
         self.btn_savedata = ttk.Button(master=self.frm_plot_options, text='Save Data...', width=15, bootstyle=(INFO, OUTLINE), command=lambda:self.save_data_to_csv())
@@ -363,7 +363,6 @@ class App(ttk.Window):
             self.frm_control.grid(row=1, column=0, sticky='ew', padx=10, pady=10)
         else:
             self.frm_control.grid(row=1, column=0, sticky='ew', padx=10)
-        # self.rframe.rowconfigure(1, weight=1)
 
         if self.hidpi_bool:
             self.nb = ttk.Notebook(self.frm_control, padding=5)
@@ -375,7 +374,6 @@ class App(ttk.Window):
         self.frm_auto = ttk.Frame(self.nb)
         self.nb.add(self.frm_manual, text="Manual")
         self.nb.add(self.frm_auto, text="Automatic")
-
 
         # Manual mode
         self.lbl_manual_msg = ttk.Label(master=self.frm_manual, text='Enter a manual setpoint < 140 \N{DEGREE CELSIUS}:')
@@ -689,8 +687,8 @@ class App(ttk.Window):
 
         xlim, ylim, time_arry, temp_as_arry, setpoint_arry = self.get_mins_lims_from_plt_str()
 
-        self.fig.clear()
-        self.ax = self.fig.add_subplot(111)
+        self.fig_main_temp_plot.clear()
+        self.ax = self.fig_main_temp_plot.add_subplot(111)
 
         if self.controller_com_port_is_selected:
             if time_arry is not None:
@@ -718,6 +716,7 @@ class App(ttk.Window):
 
     def reset_timebase(self):
         self.save_data_to_csv()     # Save the data before wiping the logs
+        self.savefig()
 
         self.timebase = time.time()
         self.rel_time = 0
@@ -728,7 +727,6 @@ class App(ttk.Window):
         self.history_mode = []
         self.history_estop = []
         self.history_status = []
-
 
     def get_rel_time(self, frmt_bool=None):
         """
@@ -790,22 +788,6 @@ class App(ttk.Window):
                 self.prog_bar_preheating.destroy()
                 self.lbl_preheat = None
                 self.prog_bar_preheating = None
-
-    # def change_state(self, new_state):
-    #     """
-    #     Possible cases:
-    #     1. No mode selected, then a manual setpoint is entered
-    #     2. No mode selected, then an auto sequence is run
-    #     3. Manual mode selected, then another manual setpoint is entered
-    #     4. Manual mode selected, then an auto sequence is started
-    #     5. Auto sequence selected, then a manual sequence is selected
-    #     6. Auto sequence selected, then another auto sequence is selected
-    #     7. Need capability to manage auto sequence
-
-    #     The state manager handles the transistions between states, such as clearing status labels and resetting variables, etc
-    #     """
-
-    #     pass
 
     def receive_controller_data_and_update(self, data_str):
         """
@@ -889,12 +871,14 @@ class App(ttk.Window):
         if 'MANUAL' not in self.str_mode.get(): # Only want to reset the timebase if manual mode is switched into from a different mode
             self.reset_timebase()
 
-        self.set_setpoint(float(self.entry_manual_setpoint.get()))
+        setpoint = float(self.entry_manual_setpoint.get())
+        self.set_setpoint(setpoint)
         self.str_mode.set(f'MANUAL {self.str_rel_time}')
         self.entry_manual_setpoint.delete(0, 'end')
         self.preheat_bar('off')
         self.str_status.set('RUNNING')
         self.lbl_status.config(foreground=app.status_colors['RUNNING'])
+        self.write_log(f'Set manual setpoint: {setpoint}C')
 
     def on_start_auto_sequence(self):
         self.reset_timebase()
@@ -904,6 +888,7 @@ class App(ttk.Window):
         self.str_status.set('RUNNING')
         self.lbl_status.config(foreground=app.status_colors['RUNNING'])
         self.update_auto_seq(first_bool=True)  # First time through the auto sequence loop
+        self.write_log('Starting autosequence')
 
         # Change start button to abort button
         self.btn_submit_seq_auto.destroy()
@@ -920,6 +905,7 @@ class App(ttk.Window):
         self.seq_minimap.lines.pop()    # Remove the last artist to avoid accumulating artists
         self.canvas_autoseq.draw()
         self.preheat_bar('off')
+        self.write_log('Stopped autosequence')
 
         self.btn_abort_seq_auto.destroy()
         self.btn_submit_seq_auto = ttk.Button(master=self.frm_auto, width=10, text="START", bootstyle=SUCCESS, command=self.on_start_auto_sequence)
@@ -954,7 +940,7 @@ class App(ttk.Window):
 
     def save_data_to_csv(self):
         """
-        Fields that are saved
+        Fields that are saved:
         Time
         temp
         setpoint
@@ -968,6 +954,12 @@ class App(ttk.Window):
             history_arry = np.column_stack((self.history_time, self.history_temp, self.history_setpoint, self.history_estop))
             header_str = 'Time [min], TC1 [degC], TC2 [degC], TC3 [degC], TC4 [degC], TC5 [degC], TC6 [degC], Setpoint [degC], Estop'
             np.savetxt(f'{self.data_dirname}/{self.get_datetime_str()}.csv', history_arry, delimiter=',', header=header_str)
+
+        self.write_log(f'Wrote data to file: {self.data_dirname}/{self.get_datetime_str()}.csv')
+
+    def savefig(self):
+        self.fig_main_temp_plot.savefig(f'{self.data_dirname}/{self.get_datetime_str()}.png', dpi=400)
+        self.write_log(f'Wrote data to file: {self.data_dirname}/{self.get_datetime_str()}.png')
 
 def process_incoming_data():
 
@@ -1085,10 +1077,7 @@ if __name__ == "__main__":
 
     # update mpl theme with light/dark -> use a plotly theme
     # todo make multithreaded so it doesn't hang    
-    # Fix issue with time scale not updating/being jerky
     # add logs
-    # fix formatting on np.savetxt
-
 
     # DONE
     # TODO ensure that estopping kills any running sequence
@@ -1102,12 +1091,6 @@ if __name__ == "__main__":
     # arduino:
     # Add a code on the arduino side for invalid temp detected on mcu side instead of just echoing the estop value. If it gets a 9000 value, don't output 9000 but instead set temp to 0 and set the unsafe bool to 1
     # New method to parse float
-
-
-    # Auto sequence issues
-    # Stop doesn't work
-    # setpoint doeons't change
-    # reverts to manual
     
     """
     MPL notes
