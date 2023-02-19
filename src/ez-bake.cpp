@@ -2,6 +2,7 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include "constants.h"
+#include "parsefloat.h"
 
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
@@ -11,7 +12,8 @@ float currentSetpointC = 0;
 uint8_t loopsSinceStateChange = DEBOUNCE_LOOPS;
 bool lastHeaterState = false;
 bool targetHeaterState = false;
-float tmp;
+float tmp = 0;
+
 
 void setup(void) {
   Serial.begin(SERIAL_BAUDRATE);
@@ -75,16 +77,17 @@ void loop(void) {
     digitalWrite(OUTPUT_PIN, LOW);
   }
 
-  // Accepts an "estop" command from the user. Interprets any temp over 1000C as a shut-down command
-  if (Serial.available() > 0) {
-    tmp = Serial.parseFloat();
-    if ((tmp >= 0) && (tmp < MAX_LEGAL_TEMP_C))    // Input temp has to be bounded between [0, MAX_LEGAL_TEMP_C) degrees
-      currentSetpointC = tmp;
-    if (tmp > 1000){
-      isUnsafe = 1;   // isUnsafe == 1 means that the controller received an erroneous setpoint, to be interpreted as an estop condition
-      currentSetpointC = 0;
+    // Accepts an "estop" command from the user. Interprets any temp over 1000C as a shut-down command
+    checkForNewString();
+    tmp = processInput();
+    if (tmp >= 0){
+      if ((tmp < MAX_LEGAL_TEMP_C) && !isUnsafe)    // Input temp has to be bounded between [0, MAX_LEGAL_TEMP_C) degrees
+        currentSetpointC = tmp;
+      if (tmp > 1000){
+        isUnsafe = 1;   // isUnsafe == 1 means that the controller received an erroneous setpoint, to be interpreted as an estop condition
+        currentSetpointC = 0;
+      }
     }
-  }
 
   readThermocouples(temperatures);   // Reads all thermocouples
   
