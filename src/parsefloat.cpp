@@ -1,5 +1,10 @@
 #include "parsefloat.h"
 
+/*
+Nonblocking implementation of the Serial.ParseFloat() function.
+
+*/
+
 // Receive data vars
 const byte numChars = 32;
 char receivedChars[numChars];

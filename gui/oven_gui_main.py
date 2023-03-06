@@ -40,7 +40,8 @@ class App(ttk.Window):
             def_font.config(size=10)
 
         self.data_dirname = self.get_datetime_str()
-        os.makedirs(f'./runs/{self.data_dirname}')
+        self.data_dirname = f'./runs/{self.data_dirname}'
+        os.makedirs(self.data_dirname)
 
         ############### Initialize all variables ###############
         # Theme variable
