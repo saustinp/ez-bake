@@ -7,12 +7,13 @@
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 tempCArray temperatures;
-int isUnsafe = 0;
+enum states {SAFE=0, ESTOP=1, FAULT=2};
 float currentSetpointC = 0;
 uint8_t loopsSinceStateChange = DEBOUNCE_LOOPS;
 bool lastHeaterState = false;
 bool targetHeaterState = false;
 float tmp = 0;
+states isUnsafe = SAFE;
 
 void setup(void) {
   Serial.begin(SERIAL_BAUDRATE);
@@ -44,7 +45,7 @@ void readThermocouples() {
   }
 }
 
-void serialPrintSummary(bool targetHeaterState, float currentSetpointC, int isUnsafe) {
+void serialPrintSummary(bool targetHeaterState, float currentSetpointC) {
   for (auto& reading: temperatures) {
       Serial.print(reading);
       Serial.print(" ");
@@ -85,7 +86,7 @@ void loop(void) {
       if ((tmp < MAX_LEGAL_TEMP_C) && !isUnsafe)    // Input temp has to be bounded between [0, MAX_LEGAL_TEMP_C) degrees
         currentSetpointC = tmp;
       if (tmp > 1000){
-        isUnsafe = 1;   // isUnsafe == 1 means that the controller received an erroneous setpoint, to be interpreted as an estop condition
+        isUnsafe = ESTOP;   // Controller received an erroneous setpoint, to be interpreted as an estop condition
         currentSetpointC = 0;
       }
     }
@@ -93,7 +94,7 @@ void loop(void) {
   readThermocouples();   // Reads all thermocouples
   
   if (!areAllTemperaturesValid()) {
-    isUnsafe = 2;   // isUnsafe == 2 means that the controller detected a fault condition
+    isUnsafe = FAULT;   // Controller detected a fault condition
     currentSetpointC = 0;
   }
 
@@ -107,7 +108,7 @@ void loop(void) {
   else
     targetHeaterState = 0;
 
-  serialPrintSummary(targetHeaterState, currentSetpointC, isUnsafe);    // Moving this line down so the heater status can be printed after the bang-bang calculation
+  serialPrintSummary(targetHeaterState, currentSetpointC);    // Moving this line down so the heater status can be printed after the bang-bang calculation
 
   // Adding a conditional so that the heater state can be printed out at every iteration - avoids breaking out of loop() if the state is not updated
   if ((targetHeaterState != lastHeaterState) && !isUnsafe){

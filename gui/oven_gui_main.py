@@ -16,7 +16,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
 class App(ttk.Window):
-    def __init__(self, window_title=None, icon=None):
+    def __init__(self, window_title=None, icon=None, hidpi_bool=False):
 
         if window_title and icon:
 
@@ -31,11 +31,17 @@ class App(ttk.Window):
         elif icon:
             super().__init__(iconphoto=icon)  # iconphoto has to be None in order to override with custom icon
 
-            # icon help: https://stackoverflow.com/questions/11176638/tkinter-tclerror-error-reading-bitmap-file
             self.iconphoto(True, tk.PhotoImage(file=icon))
+        
+        self.hidpi_bool = hidpi_bool
+
+        if not self.hidpi_bool:
+            def_font = tk.font.nametofont("TkDefaultFont")
+            def_font.config(size=10)
 
         self.data_dirname = self.get_datetime_str()
-        os.makedirs(f'./runs/{self.data_dirname}')
+        self.data_dirname = f'./runs/{self.data_dirname}'
+        os.makedirs(self.data_dirname)
 
         ############### Initialize all variables ###############
         # Theme variable
@@ -116,38 +122,48 @@ class App(ttk.Window):
         # themes = ['sandstone', 'darkly']   # Names for light and dark themes
         self.themes = ['Dark', 'Light']
 
-        self.frm_title = ttk.Frame(self.root, padding=(10, 10, 10, 0))
+        if self.hidpi_bool:
+            self.frm_title = ttk.Frame(self.root, padding=(10, 10, 10, 0))
+        else:
+            self.frm_title = ttk.Frame(self.root)
+            
         self.frm_title.grid(row=0, column=0, columnspan=2, rowspan=1, sticky='ew')
-
-        self.lbl_title = ttk.Label(master=self.frm_title, text="Oven Control", font="-size 24 -weight bold")
-        self.lbl_title.pack(side=LEFT)
 
         self.str_status = tk.StringVar(value='INACTIVE')
         self.status_colors = {'INACTIVE': 'black', 'CONNECTED': 'blue', 'RUNNING': 'green', 'ESTOPPED': 'red'}
-        self.lbl_status = ttk.Label(master=self.frm_title, textvariable=self.str_status, font="-size 18 -weight bold", bootstyle=(SECONDARY))
+
+        if self.hidpi_bool:
+            self.lbl_title = ttk.Label(master=self.frm_title, text="Oven Control", font="-size 24 -weight bold")
+            self.lbl_status = ttk.Label(master=self.frm_title, textvariable=self.str_status, font="-size 18 -weight bold", bootstyle=(SECONDARY))
+            self.lbl_status_text = ttk.Label(master=self.frm_title, text="STATUS: ", font="-size 18 -weight bold")
+        else:
+            self.lbl_title = ttk.Label(master=self.frm_title, text="Oven Control", font="-size 18 -weight bold")
+            self.lbl_status = ttk.Label(master=self.frm_title, textvariable=self.str_status, font="-size 14 -weight bold", bootstyle=(SECONDARY))
+            self.lbl_status_text = ttk.Label(master=self.frm_title, text="STATUS: ", font="-size 14 -weight bold")
+
+        self.lbl_title.pack(side=LEFT)
         self.lbl_status.pack(side=RIGHT)
 
-        self.lbl_status_text = ttk.Label(master=self.frm_title, text="STATUS: ", font="-size 18 -weight bold")
         self.lbl_status_text.pack(side=RIGHT)
 
         self.separator2 = tk.Frame(self.root, bd=10, relief='sunken', height=4)
         self.separator2.grid(row=1, column=0, columnspan=2, rowspan=1, pady=10, padx=10, sticky='ew')
         
-
-        # Frame configuration
-
         # Main left and right container frames
-        # lframe = ttk.Frame(root, bootstyle=(INFO))
         self.lframe = ttk.Frame(self.root)
         self.lframe.grid(row=2, column=0, padx=10, pady=10, sticky='nsew')
 
-        # self.rframe = ttk.Frame(root, bootstyle=(SUCCESS))
         self.rframe = ttk.Frame(self.root)
         self.rframe.grid(row=2, column=1, padx=10, pady=10, sticky='nsew')
 
-        self.root.columnconfigure(0, minsize=1400, weight=1)
-        self.root.columnconfigure(1, minsize=900, weight=1)
-        self.root.rowconfigure(2, minsize=1500, weight=1)
+        if self.hidpi_bool:
+            self.root.columnconfigure(0, minsize=1400, weight=1)
+            self.root.columnconfigure(1, minsize=900, weight=1)
+            self.root.rowconfigure(2, minsize=1500, weight=1)
+        else:
+            self.root.columnconfigure(0, minsize=900, weight=1)
+            self.root.columnconfigure(1, minsize=500, weight=1)
+            self.root.rowconfigure(2, minsize=800, weight=1)
 
         self.frm_theme_selection = ttk.Labelframe(master=self.lframe, text="Settings", padding=10, bootstyle=INFO)
         self.frm_theme_selection.grid(row=0, column=0, sticky='ew', padx=10, pady=10)
@@ -229,11 +245,11 @@ class App(ttk.Window):
         self.frm_theme_selection.columnconfigure(7, weight=1)
         self.frm_theme_selection.columnconfigure(8, weight=1)
 
-        # Matplotlib
-        self.fig = Figure()
-        self.ax = self.fig.add_subplot(111)
+        # Main temperature plot
+        self.fig_main_temp_plot = Figure()
+        self.ax = self.fig_main_temp_plot.add_subplot(111)
 
-        self.canvas = FigureCanvasTkAgg(self.fig, master=self.lframe)
+        self.canvas = FigureCanvasTkAgg(self.fig_main_temp_plot, master=self.lframe)
         self.canvas.get_tk_widget().grid(row=1, column=0, sticky='nsew')
 
         self.draw_plot()
@@ -242,7 +258,7 @@ class App(ttk.Window):
         self.frm_plot_options = ttk.Frame(master=self.lframe, padding=10)
         self.frm_plot_options.grid(row=2, column=0, sticky='ew')
 
-        self.btn_savefig = ttk.Button(master=self.frm_plot_options, text='Save Plot...', width=15, bootstyle=(INFO, OUTLINE), command=lambda:self.fig.savefig(f'{self.data_dirname}/{self.get_datetime_str()}.png', dpi=400))
+        self.btn_savefig = ttk.Button(master=self.frm_plot_options, text='Save Plot...', width=15, bootstyle=(INFO, OUTLINE), command=lambda:self.savefig())
         self.btn_savefig.pack(side=RIGHT, padx=150, pady=5)
 
         self.btn_savedata = ttk.Button(master=self.frm_plot_options, text='Save Data...', width=15, bootstyle=(INFO, OUTLINE), command=lambda:self.save_data_to_csv())
@@ -278,7 +294,12 @@ class App(ttk.Window):
         self.frm_status.grid(row=0, column=0, sticky='ew', padx=10, pady=10)
         self.rframe.columnconfigure(0, minsize=self.rframe.winfo_width(), weight=1)
 
-        self.status_fsize = 12
+        if self.hidpi_bool:
+            self.status_fsize = 12
+        else:
+            self.status_fsize = 8
+
+        # Status frame labels
         self.str_heater_status = tk.StringVar(value='HEATER OFF')
         self.lbl_mean_temp = ttk.Label(master=self.frm_status, text='Average Temperature: ', font=f"-size {self.status_fsize}")
         self.lbl_stddev = ttk.Label(master=self.frm_status, text= f'1-\N{GREEK SMALL LETTER SIGMA} Std. Deviation: ', font=f"-size {self.status_fsize}")
@@ -312,9 +333,14 @@ class App(ttk.Window):
         self.lbl_action_val.grid(row=4, column=1, sticky='w')
         self.lbl_mode_val.grid(row=3, column=1, sticky='w')
 
-        self.heater_canvas = tk.Canvas(self.frm_status, width=200, height=200)
-        self.heater_canvas.grid(row=0, column=2, rowspan=5)
-        self.status_indicator = self.heater_canvas.create_oval(0, 0, 180, 180, fill='gray')
+        if self.hidpi_bool:
+            self.heater_canvas = tk.Canvas(self.frm_status, width=200, height=200)
+            self.heater_canvas.grid(row=0, column=2, rowspan=5)
+            self.status_indicator = self.heater_canvas.create_oval(0, 0, 180, 180, fill='gray')
+        else:
+            self.heater_canvas = tk.Canvas(self.frm_status, width=100, height=100)
+            self.heater_canvas.grid(row=0, column=2, rowspan=5)
+            self.status_indicator = self.heater_canvas.create_oval(10, 0, 90, 80, fill='gray')
 
         self.frm_status.columnconfigure(0, weight=1)
         self.frm_status.columnconfigure(1, weight=1)
@@ -327,19 +353,23 @@ class App(ttk.Window):
         self.frm_status.rowconfigure(4, weight=1)
         self.frm_status.rowconfigure(5, weight=1)
 
-        # Control pane
+        # Control pane - manual or autosequence selector
         self.frm_control = ttk.Labelframe(master=self.rframe, text="Control", padding=10, bootstyle=INFO)
-        self.frm_control.grid(row=1, column=0, sticky='ew', padx=10, pady=10)
-        # self.rframe.rowconfigure(1, weight=1)
+        if self.hidpi_bool:
+            self.frm_control.grid(row=1, column=0, sticky='ew', padx=10, pady=10)
+        else:
+            self.frm_control.grid(row=1, column=0, sticky='ew', padx=10)
 
+        if self.hidpi_bool:
+            self.nb = ttk.Notebook(self.frm_control, padding=5)
+        else:    
+            self.nb = ttk.Notebook(self.frm_control, padding=10)
 
-        self.nb = ttk.Notebook(self.frm_control, padding=15)
         self.nb.grid(row=0, column=0, sticky='nsew')
         self.frm_manual = ttk.Frame(self.nb)
         self.frm_auto = ttk.Frame(self.nb)
         self.nb.add(self.frm_manual, text="Manual")
         self.nb.add(self.frm_auto, text="Automatic")
-
 
         # Manual mode
         self.lbl_manual_msg = ttk.Label(master=self.frm_manual, text='Enter a manual setpoint < 140 \N{DEGREE CELSIUS}:')
@@ -358,8 +388,6 @@ class App(ttk.Window):
         self.btn_submit_seq_auto = ttk.Button(master=self.frm_auto, width=10, text="START", bootstyle=SUCCESS, state=DISABLED, command=self.on_start_auto_sequence)
         self.btn_submit_seq_auto.grid(row=1, column=1, padx=10, pady=10)
 
-        # todo Add buttons here for the auto sequence cancel command=lambda:self.on_abort_auto_seq
-
         # Initialize auto tab with a message telling the user to input a sequence
         self.lbl_init_auto = ttk.Label(master=self.frm_auto, text='Please select a temperature profile to run.')
         self.lbl_init_auto.grid(row=0, column=0, columnspan=2, sticky='w', padx=10, pady=100)
@@ -367,17 +395,27 @@ class App(ttk.Window):
         self.rframe.rowconfigure(1, weight=1)
 
         # Monitor Frame
-        self.frm_monitor = ttk.Labelframe(master=self.rframe, text="Monitor", padding=10, bootstyle=INFO)
-        self.frm_monitor.grid(row=2, column=0, sticky='ew', padx=10, pady=10)
+        # Padding depends on screen resolution
+        if self.hidpi_bool:
+            self.frm_monitor = ttk.Labelframe(master=self.rframe, text="Monitor", padding=10, bootstyle=INFO)
+            self.frm_monitor.grid(row=2, column=0, sticky='ew', padx=10, pady=10)
 
+            self.frm_temp_monitor = ttk.Frame(self.frm_monitor, padding=(20, 10, 10, 10))
+            self.frm_temp_monitor.grid(row=0, column=0, sticky='ns')
+            
+            self.frm_fan_monitor = ttk.Frame(self.frm_monitor, padding=(60, 10, 10, 10))
+            self.frm_fan_monitor.grid(row=0, column=1, sticky='ns')
+        else:
+            self.frm_monitor = ttk.Labelframe(master=self.rframe, text="Monitor", padding=10, bootstyle=INFO)
+            self.frm_monitor.grid(row=2, column=0, sticky='ew', padx=10)
 
-        self.frm_temp_monitor = ttk.Frame(self.frm_monitor, padding=(20, 10, 10, 10))
-        self.frm_temp_monitor.grid(row=0, column=0, sticky='ns')
-        
-        self.frm_fan_monitor = ttk.Frame(self.frm_monitor, padding=(60, 10, 10, 10))
-        self.frm_fan_monitor.grid(row=0, column=1, sticky='ns')
+            self.frm_temp_monitor = ttk.Frame(self.frm_monitor, padding=(10, 0, 10, 0))
+            self.frm_temp_monitor.grid(row=0, column=0, sticky='ns')
+            
+            self.frm_fan_monitor = ttk.Frame(self.frm_monitor, padding=(30, 0, 10, 0))
+            self.frm_fan_monitor.grid(row=0, column=1, sticky='ns')
 
-
+        # Temperature monitor labels
         self.str_tc1 = tk.StringVar(value=f'-- \N{DEGREE CELSIUS}')
         self.str_tc2 = tk.StringVar(value=f'-- \N{DEGREE CELSIUS}')
         self.str_tc3 = tk.StringVar(value=f'-- \N{DEGREE CELSIUS}')
@@ -426,7 +464,7 @@ class App(ttk.Window):
         self.frm_status.rowconfigure(5, weight=1)
 
 
-
+        # Fan status monitor labels
         self.str_fan1 = tk.StringVar(value=f'-- RPM')
         self.str_fan2 = tk.StringVar(value=f'-- RPM')
 
@@ -448,7 +486,6 @@ class App(ttk.Window):
 
         self.frm_status.rowconfigure(0, weight=1)
         self.frm_status.rowconfigure(1, weight=1)
-
 
         self.root.pack(fill=BOTH, expand=YES)
 
@@ -608,19 +645,34 @@ class App(ttk.Window):
             self.btn_submit_seq_auto.config(state=NORMAL)
 
             # Matplotlib plot sequence widget
-            self.fig_seq = Figure(figsize=(1, 3.5), dpi=100)
+            if self.hidpi_bool:
+                self.fig_seq = Figure(figsize=(1, 3.5), dpi=100)
+            else:
+                self.fig_seq = Figure(figsize=(1, 2.1), dpi=100)
+                
             self.seq_minimap = self.fig_seq.add_subplot(111)
             self.seq_minimap.plot(self.auto_sequence[:,0], self.auto_sequence[:,1], 'black')
-            self.seq_minimap.set_xlabel('Time [min]', fontsize=10)
-            self.seq_minimap.set_ylabel(f'Temperature [\N{DEGREE CELSIUS}]', fontsize=10)
-            self.seq_minimap.tick_params(axis='both', which='major', labelsize=10)
-            self.seq_minimap.set_title('Sequence', fontsize=15)
+
+            if self.hidpi_bool:
+                self.seq_minimap.set_xlabel('Time [min]', fontsize=10)
+                self.seq_minimap.set_ylabel(f'Temperature [\N{DEGREE CELSIUS}]', fontsize=10)
+                self.seq_minimap.tick_params(axis='both', which='major', labelsize=10)
+                self.seq_minimap.set_title('Sequence', fontsize=15)
+            else:
+                self.seq_minimap.set_xlabel('Time [min]', fontsize=5)
+                self.seq_minimap.set_ylabel(f'Temperature [\N{DEGREE CELSIUS}]', fontsize=5)
+                self.seq_minimap.tick_params(axis='both', which='major', labelsize=5)
+                self.seq_minimap.set_title('Sequence', fontsize=6)
 
             self.canvas_autoseq = FigureCanvasTkAgg(self.fig_seq, master=self.frm_auto)
-            self.canvas_autoseq.get_tk_widget().grid(row=3, column=0, columnspan=2, sticky='nsew', pady=20, ipady=20)
+            if self.hidpi_bool:
+                self.canvas_autoseq.get_tk_widget().grid(row=3, column=0, columnspan=2, sticky='nsew', pady=20, ipady=20)
+            else:
+                self.canvas_autoseq.get_tk_widget().grid(row=3, column=0, columnspan=2, sticky='nsew', pady=20, ipady=20)
+                
             self.rframe.rowconfigure(1, weight=1)
 
-            # Build an interpolation function
+            # Build an interpolation function for the autosequence
             self.auto_sequence_interp = interpolate.interp1d(self.auto_sequence[:,0], self.auto_sequence[:,1])
 
     def write_log(self, msg):
@@ -630,8 +682,8 @@ class App(ttk.Window):
 
         xlim, ylim, time_arry, temp_as_arry, setpoint_arry = self.get_mins_lims_from_plt_str()
 
-        self.fig.clear()
-        self.ax = self.fig.add_subplot(111)
+        self.fig_main_temp_plot.clear()
+        self.ax = self.fig_main_temp_plot.add_subplot(111)
 
         if self.controller_com_port_is_selected:
             if time_arry is not None:
@@ -641,10 +693,17 @@ class App(ttk.Window):
                 self.ax.plot(time_arry, setpoint_arry, 'red', linewidth=3, label='Setpoint')
                 self.ax.legend()    #loc='northeast'
 
-        self.ax.set_xlabel('Time [min]', fontsize=25)
-        self.ax.set_ylabel(f'Temperature [\N{DEGREE CELSIUS}]', fontsize=20)
-        self.ax.tick_params(axis='both', which='major', labelsize=20)
-        self.ax.set_title('Temperature History', fontsize=35)
+        if self.hidpi_bool:
+            self.ax.set_xlabel('Time [min]', fontsize=25)
+            self.ax.set_ylabel(f'Temperature [\N{DEGREE CELSIUS}]', fontsize=20)
+            self.ax.tick_params(axis='both', which='major', labelsize=20)
+            self.ax.set_title('Temperature History', fontsize=35)
+        else:
+            self.ax.set_xlabel('Time [min]', fontsize=10)
+            self.ax.set_ylabel(f'Temperature [\N{DEGREE CELSIUS}]', fontsize=10)
+            self.ax.tick_params(axis='both', which='major', labelsize=10)
+            self.ax.set_title('Temperature History', fontsize=14)
+
         self.ax.set_xlim(xlim)       # Set the current xlim to whatever was initialized in plt_scale_var
         self.ax.set_ylim(ylim)       # Compute the ylim based on the range of data being displayed
 
@@ -652,6 +711,7 @@ class App(ttk.Window):
 
     def reset_timebase(self):
         self.save_data_to_csv()     # Save the data before wiping the logs
+        self.savefig()
 
         self.timebase = time.time()
         self.rel_time = 0
@@ -662,7 +722,6 @@ class App(ttk.Window):
         self.history_mode = []
         self.history_estop = []
         self.history_status = []
-
 
     def get_rel_time(self, frmt_bool=None):
         """
@@ -725,22 +784,6 @@ class App(ttk.Window):
                 self.lbl_preheat = None
                 self.prog_bar_preheating = None
 
-    # def change_state(self, new_state):
-    #     """
-    #     Possible cases:
-    #     1. No mode selected, then a manual setpoint is entered
-    #     2. No mode selected, then an auto sequence is run
-    #     3. Manual mode selected, then another manual setpoint is entered
-    #     4. Manual mode selected, then an auto sequence is started
-    #     5. Auto sequence selected, then a manual sequence is selected
-    #     6. Auto sequence selected, then another auto sequence is selected
-    #     7. Need capability to manage auto sequence
-
-    #     The state manager handles the transistions between states, such as clearing status labels and resetting variables, etc
-    #     """
-
-    #     pass
-
     def receive_controller_data_and_update(self, data_str):
         """
         Doubles as the serial parser and state manager while in a state
@@ -768,10 +811,9 @@ class App(ttk.Window):
         self.temp_mean = np.mean(self.tc_readings)
         self.temp_std = np.std(self.tc_readings, ddof=1)    # Sample standard deviation, not population std deviation
 
-        # print(parse_args)
-        self.flt_mean_temp.set(round(self.temp_mean, 2))
-        self.flt_stddev.set(round(self.temp_std, 2))
-        self.flt_setpoint.set(self.setpoint)
+        self.flt_mean_temp.set(f'{round(self.temp_mean, 2)} \N{DEGREE CELSIUS}')
+        self.flt_stddev.set(f'{round(self.temp_std, 2)} \N{DEGREE CELSIUS}')
+        self.flt_setpoint.set(f'{round(self.setpoint, 2)} \N{DEGREE CELSIUS}')
 
         self.set_heater_indicator(self.heater_is_active)
 
@@ -797,6 +839,7 @@ class App(ttk.Window):
 
         if int(estop) and not self.estop_bool:      # Estop can be either 1 or 2 depending on the fault condition. Only calls the estop function once and not in subsequent loops. TODO log the fault condition
             self.on_estop()
+            self.write_log(f'ESTOP CODE: {estop}')
 
         self.draw_plot()
 
@@ -817,18 +860,23 @@ class App(ttk.Window):
 
     # "State machine" update functions - self.str_mode holds the current state
     def on_set_manual_setpoint(self):      # This is kind of like a state transistion manager
+        if not self.entry_manual_setpoint.get():    # If the manual setpoint field was empty
+            return
+
         if 'AUTO' in self.str_mode.get():
             self.on_abort_auto_seq()
 
         if 'MANUAL' not in self.str_mode.get(): # Only want to reset the timebase if manual mode is switched into from a different mode
             self.reset_timebase()
 
-        self.set_setpoint(float(self.entry_manual_setpoint.get()))
+        setpoint = float(self.entry_manual_setpoint.get())
+        self.set_setpoint(setpoint)
         self.str_mode.set(f'MANUAL {self.str_rel_time}')
         self.entry_manual_setpoint.delete(0, 'end')
         self.preheat_bar('off')
         self.str_status.set('RUNNING')
         self.lbl_status.config(foreground=app.status_colors['RUNNING'])
+        self.write_log(f'Set manual setpoint: {setpoint}C')
 
     def on_start_auto_sequence(self):
         self.reset_timebase()
@@ -838,6 +886,7 @@ class App(ttk.Window):
         self.str_status.set('RUNNING')
         self.lbl_status.config(foreground=app.status_colors['RUNNING'])
         self.update_auto_seq(first_bool=True)  # First time through the auto sequence loop
+        self.write_log('Starting autosequence')
 
         # Change start button to abort button
         self.btn_submit_seq_auto.destroy()
@@ -854,6 +903,7 @@ class App(ttk.Window):
         self.seq_minimap.lines.pop()    # Remove the last artist to avoid accumulating artists
         self.canvas_autoseq.draw()
         self.preheat_bar('off')
+        self.write_log('Stopped autosequence')
 
         self.btn_abort_seq_auto.destroy()
         self.btn_submit_seq_auto = ttk.Button(master=self.frm_auto, width=10, text="START", bootstyle=SUCCESS, command=self.on_start_auto_sequence)
@@ -868,7 +918,6 @@ class App(ttk.Window):
             self.str_status.set('CONNECTED')
             self.lbl_status.config(foreground=self.status_colors['CONNECTED'])
             self.btn_select_seq_auto.config(state=NORMAL)
-            #todo make sure that the state handling for the auto sequence buttons is done correctly when the sequence is over
 
         else:
             # Update the minimap
@@ -888,7 +937,7 @@ class App(ttk.Window):
 
     def save_data_to_csv(self):
         """
-        Fields that are saved
+        Fields that are saved:
         Time
         temp
         setpoint
@@ -901,7 +950,15 @@ class App(ttk.Window):
         if len(self.history_time):
             history_arry = np.column_stack((self.history_time, self.history_temp, self.history_setpoint, self.history_estop))
             header_str = 'Time [min], TC1 [degC], TC2 [degC], TC3 [degC], TC4 [degC], TC5 [degC], TC6 [degC], Setpoint [degC], Estop'
-            np.savetxt(f'{self.data_dirname}/{self.get_datetime_str()}.csv', history_arry, delimiter=',', header=header_str)
+            fname = f'{self.data_dirname}/{self.get_datetime_str()}.csv'
+            np.savetxt(fname, history_arry, delimiter=',', header=header_str)
+            self.write_log(f'Wrote data to file: {fname}')
+
+    def savefig(self):
+        if len(self.history_time):
+            fname = f'{self.data_dirname}/{self.get_datetime_str()}.png'
+            self.fig_main_temp_plot.savefig(fname, dpi=400)
+            self.write_log(f'Wrote data to file: {fname}')
 
 def process_incoming_data():
 
@@ -954,7 +1011,6 @@ def process_incoming_data():
     else:
         app.after(1000, process_incoming_data)
 
-    # print(app.ports != serial.tools.list_ports.comports())
     if app.ports != serial.tools.list_ports.comports():     # The list of ports has changed, like after adding a device
         # Update the menu of possible COM ports
 
@@ -1007,44 +1063,10 @@ def process_incoming_data():
         app.mb_fan2_com.grid(row=0, column=7, padx=5, pady=5, sticky='w')
 
 
-# TODO put all the instance attributes of serial in the constructor
 if __name__ == "__main__":
+    hidpi_bool = True
 
-    app = App("TRAK TRO 37 SMH Command, Control, and Monitoring Center", "iconic.png")
+    app = App("TRAK TRO 37 SMH Command, Control, and Monitoring Center", "iconic.png", hidpi_bool)
     
-    # NOTE: recursion depth exceeds if you configure it to process_incoming_data(app)
     app.after(0, process_incoming_data)
     app.mainloop()
-
-    # update mpl theme with light/dark -> use a plotly theme
-    # todo make multithreaded so it doesn't hang    
-    # Fix issue with time scale not updating/being jerky
-    # add logs
-    # fix formatting on np.savetxt
-
-
-    # DONE
-    # TODO ensure that estopping kills any running sequence
-    # Add option for all time plotting
-    # Deal with the nans incoming
-    # put header on output csv, and output ALL data fields
-    # figure out something different to do with the nans than just reverting to the last one, maybe make a log of when it shows nan
-    # Add fan RPM support
-    # Graph/scale the limits to account for the setpoint
-
-    # arduino:
-    # Add a code on the arduino side for invalid temp detected on mcu side instead of just echoing the estop value. If it gets a 9000 value, don't output 9000 but instead set temp to 0 and set the unsafe bool to 1
-    # New method to parse float
-
-
-    # Auto sequence issues
-    # Stop doesn't work
-    # setpoint doeons't change
-    # reverts to manual
-    
-    """
-    MPL notes
-    snapping makes the axes sharper
-    list(ax.lines) returns the list of artists (lines, whatever was plotted)
-    ax.lines.pop() returns the most recently added artist
-    """
