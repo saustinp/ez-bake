@@ -16,7 +16,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
 class App(ttk.Window):
-    def __init__(self, window_title=None, icon=None, hidpi_bool=False):
+    def __init__(self, window_title=None, icon=None, hidpi_bool=False, app_dirname=None):
 
         if window_title and icon:
 
@@ -44,6 +44,9 @@ class App(ttk.Window):
         os.makedirs(self.data_dirname)
 
         ############### Initialize all variables ###############
+
+        self.app_dirname = app_dirname
+
         # Theme variable
         self.selected_theme = tk.StringVar(value='Light')
         self.selected_theme.trace("w", lambda *_:self.update_theme(self.selected_theme))
@@ -84,11 +87,13 @@ class App(ttk.Window):
         self.history_time = []
         self.history_temp = []
         self.history_setpoint = []
-        self.history_mode = []
         self.history_estop = []
+        self.history_mode = []
         self.history_status = []
         self.history_fan1 = []
         self.history_fan2 = []
+        self.history_real_time = []
+        self.history_heater = []
 
         self.fan1_rpm = 0
         self.fan2_rpm = 0
@@ -104,7 +109,7 @@ class App(ttk.Window):
         self.lbl_preheat = None
         self.prog_bar_preheating = None
 
-        self.null_time = '00:00:00'
+        self.null_time = '0:00:00'
         self.str_rel_time = self.null_time
 
         self.seq_minimap = None
@@ -836,6 +841,8 @@ class App(ttk.Window):
         self.history_estop.append(self.estop_bool)
         self.history_fan1.append(self.fan1_rpm)     # The fan RPMs are appended in the main controller loop so that the length of the list matches those for the other quantities
         self.history_fan2.append(self.fan2_rpm)
+        self.history_real_time.append(datetime.now().strftime("%m/%d/%Y, %H:%M:%S"))
+        self.history_heater.append(self.heater_is_active)
 
         if int(estop) and not self.estop_bool:      # Estop can be either 1 or 2 depending on the fault condition. Only calls the estop function once and not in subsequent loops. TODO log the fault condition
             self.on_estop()
@@ -957,15 +964,26 @@ class App(ttk.Window):
         """
 
         if len(self.history_time):
-            history_arry = np.column_stack((self.history_time, self.history_temp, self.history_setpoint, self.history_estop))
-            header_str = 'Time [min], TC1 [degC], TC2 [degC], TC3 [degC], TC4 [degC], TC5 [degC], TC6 [degC], Setpoint [degC], Estop'
-            fname = f'{self.data_dirname}/{self.get_datetime_str()}.csv'
-            np.savetxt(fname, history_arry, delimiter=',', header=header_str)
+            history_arry = np.column_stack((self.history_real_time,
+                                            self.history_time,
+                                            self.history_temp,
+                                            self.history_setpoint,
+                                            self.history_estop,
+                                            self.history_heater,
+                                            self.history_fan1,
+                                            self.history_fan2,
+                                            self.history_mode,
+                                            self.history_status
+                                            ))
+            
+            header_str = 'Time, Rel time [min], TC1 [degC], TC2 [degC], TC3 [degC], TC4 [degC], TC5 [degC], TC6 [degC], Setpoint [degC], Estop, Heater On/Off, Fan 1 [RPM], Fan 2 [RPM], Mode, Status'
+            fname = f'{self.app_dirname}/{self.data_dirname}/{self.get_datetime_str()}.csv'
+            np.savetxt(fname, history_arry, delimiter=',', header=header_str, fmt='%s', comments='')    # Last argument prevents '#' from being appended to the start of the file. '%s' allows us to save the file with both string and numerical dtypes
             self.write_log(f'Wrote data to file: {fname}')
 
     def savefig(self):
         if len(self.history_time):
-            fname = f'{self.data_dirname}/{self.get_datetime_str()}.png'
+            fname = f'{self.app_dirname}/{self.data_dirname}/{self.get_datetime_str()}.png'
             self.fig_main_temp_plot.savefig(fname, dpi=400)
             self.write_log(f'Wrote data to file: {fname}')
 
@@ -1075,7 +1093,8 @@ def process_incoming_data():
 if __name__ == "__main__":
     hidpi_bool = True
 
-    app = App("TRAK TRO 37 SMH Command, Control, and Monitoring Center", "iconic.png", hidpi_bool)
+    app_dirname = os.path.dirname(__file__)
+    app = App("TRAK TRO 37 SMH Command, Control, and Monitoring Center", f"{app_dirname}/iconic.png", hidpi_bool, app_dirname)
     
     app.after(0, process_incoming_data)
     app.mainloop()
