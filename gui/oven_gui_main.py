@@ -730,7 +730,7 @@ class App(ttk.Window):
 
         sec_rel = (time.time() - self.timebase)
         if frmt_bool:
-            return sec_rel/60, str(timedelta(seconds=sec_rel))[2:-4]    # Chops off the extra characters (don't need days or ms)
+            return sec_rel/60, str(timedelta(seconds=sec_rel)).split('.')[0]    # Chops off the ms
         else:
             return sec_rel/60     # Convert second to minutes
 
@@ -851,12 +851,21 @@ class App(ttk.Window):
             self.update_auto_seq()     # Update the auto sequence setpoint
 
     def receive_fan1_data(self, serial_str):
-        self.fan1_rpm = int(serial_str)
-        self.str_fan1.set(f'{self.fan1_rpm} RPM')
+        # Was seeing a infrequent occurrence of an empty string being received from the fan arduino
+        try:
+            self.fan1_rpm = int(serial_str)
+            self.str_fan1.set(f'{self.fan1_rpm} RPM')
+        except Exception as e:
+            print(datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+            print(e)
 
     def receive_fan2_data(self, serial_str):
-        self.fan2_rpm = int(serial_str)
-        self.str_fan2.set(f'{self.fan2_rpm} RPM')
+        try:
+            self.fan2_rpm = int(serial_str)
+            self.str_fan2.set(f'{self.fan2_rpm} RPM')
+        except Exception as e:
+            print(datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+            print(e)
 
     # "State machine" update functions - self.str_mode holds the current state
     def on_set_manual_setpoint(self):      # This is kind of like a state transistion manager
